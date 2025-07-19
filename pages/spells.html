@@ -23,7 +23,32 @@
     </header>
 
     <main>
+        <section id="spells-section">
+            <h2 class="section-title">Cantrips Catalog</h2>
+
+            <div class="controls-container">
+                <input type="text" id="search-bar" placeholder="Search spell by name...">
+                <div class="filters-group">
+                    <select id="school-filter">
+                        <option value="">All schools</option>
+                    </select>
+                    <select id="class-filter">
+                        <option value="">All classes</option>
+                    </select>
+                </div>
+            </div>
+            <div id="spells-grid"></div>
+        </section>
     </main>
+
+    <div id="spell-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <div id="modal-spell-details">
+                
+            </div>
+        </div>
+    </div>
 
     <footer>
         <p>Grimoire Arcanum, by MADH</p>

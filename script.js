@@ -1,15 +1,267 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // --- Código de la barra de navegación (Navbar Logic) ---
     const header = document.querySelector('header');
     const logoContainer = document.querySelector('.logo-container');
     const nav = document.getElementById('main-nav');
+    const mainLogo = document.getElementById('main-logo');
 
-    header.addEventListener('mouseenter', function() {
-        logoContainer.style.opacity = 0;
-        nav.style.opacity = 1;
-    });
+    const tabletAndMobileMediaQuery = window.matchMedia('(max-width: 768px)');
 
-    header.addEventListener('mouseleave', function() {
+    function enableDesktopHoverLogic() {
+        mainLogo.removeEventListener('click', toggleNavOnClick);
+        document.removeEventListener('click', closeNavOnOutsideClick);
+        nav.querySelectorAll('a').forEach(link => {
+            link.removeEventListener('click', closeNavOnLinkClick);
+        });
+
         logoContainer.style.opacity = 1;
         nav.style.opacity = 0;
+        nav.classList.remove('show');
+
+        header.addEventListener('mouseenter', handleMouseEnter);
+        header.addEventListener('mouseleave', handleMouseLeave);
+
+        mainLogo.style.cursor = 'default';
+    }
+
+    function enableMobileClickLogic() {
+        header.removeEventListener('mouseenter', handleMouseEnter);
+        header.removeEventListener('mouseleave', handleMouseLeave);
+
+        logoContainer.style.opacity = 1;
+        nav.style.opacity = 0;
+        nav.classList.remove('show');
+        nav.style.top = '';
+        nav.style.left = '';
+        nav.style.transform = '';
+
+        mainLogo.addEventListener('click', toggleNavOnClick);
+        document.addEventListener('click', closeNavOnOutsideClick);
+        nav.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', closeNavOnLinkClick);
+        });
+
+        mainLogo.style.cursor = 'pointer';
+    }
+
+    function handleMouseEnter() {
+        logoContainer.style.opacity = 0;
+        nav.style.opacity = 1;
+        nav.style.pointerEvents = 'auto';
+    }
+
+    function handleMouseLeave() {
+        logoContainer.style.opacity = 1;
+        nav.style.opacity = 0;
+        nav.style.pointerEvents = 'none';
+    }
+
+    function toggleNavOnClick() {
+        nav.classList.toggle('show');
+    }
+
+    function closeNavOnOutsideClick(event) {
+        if (!mainLogo.contains(event.target) && !nav.contains(event.target)) {
+            if (nav.classList.contains('show')) {
+                nav.classList.remove('show');
+            }
+        }
+    }
+
+    function closeNavOnLinkClick() {
+        if (nav.classList.contains('show')) {
+            nav.classList.remove('show');
+        }
+    }
+
+    function checkMediaQuery() {
+        if (tabletAndMobileMediaQuery.matches) {
+            enableMobileClickLogic();
+            console.log('Modo Tablet/Móvil: Interacción por clic.');
+        } else {
+            enableDesktopHoverLogic();
+            console.log('Modo Desktop: Interacción por hover.');
+        }
+    }
+
+    checkMediaQuery();
+
+    tabletAndMobileMediaQuery.addListener(checkMediaQuery);
+
+    // --- FIN DEL CÓDIGO DE LA BARRA DE NAVEGACIÓN ---
+
+
+    // --- INICIO DEL CÓDIGO DE SPELLS PAGE ---
+
+    // Select DOM Elements
+    const spellsGrid = document.getElementById('spells-grid');
+    const spellModal = document.getElementById('spell-modal');
+    const modalSpellDetails = document.getElementById('modal-spell-details');
+    const closeButton = document.querySelector('.close-button');
+
+    // API Endpoint
+    const API_BASE_URL = 'https://www.dnd5eapi.co';
+
+    // Function to Fetch Cantrips
+async function fetchCantrips() {
+    console.log('fetchCantrips is running...');
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/spells`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('Initial spell list from API:', data.results.length, data.results);
+
+        const allSpellUrls = data.results;
+        const cantripsFound = [];
+        
+        // --- CONFIGURACIÓN DE CONCURRENCIA ---
+        const CONCURRENT_REQUESTS = 8;
+        const DELAY_BETWEEN_BATCHES = 80;
+
+        console.log(`Starting detailed fetch for spells with ${CONCURRENT_REQUESTS} concurrent requests and ${DELAY_BETWEEN_BATCHES}ms delay between batches...`);
+
+        for (let i = 0; i < allSpellUrls.length; i += CONCURRENT_REQUESTS) {
+            const batch = allSpellUrls.slice(i, i + CONCURRENT_REQUESTS);
+            
+            const batchPromises = batch.map(async (spell) => {
+                try {
+                    const detailResponse = await fetch(`${API_BASE_URL}${spell.url}`);
+                    if (!detailResponse.ok) {
+                        console.warn(`Failed to fetch details for ${spell.name}: status ${detailResponse.status}. Skipping.`);
+                        return null; 
+                    }
+                    const detailedSpell = await detailResponse.json();
+                    return detailedSpell;
+                } catch (detailError) {
+                    console.error(`Error fetching details for ${spell.name}:`, detailError);
+                    return null;
+                }
+            });
+
+            const results = await Promise.all(batchPromises);
+            
+            results.forEach(detailedSpell => {
+                if (detailedSpell && detailedSpell.level === 0) {
+                    cantripsFound.push(detailedSpell);
+                }
+            });
+
+            if (i + CONCURRENT_REQUESTS < allSpellUrls.length) {
+                await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+            }
+        }
+
+        console.log('Total detailed spells processed:', allSpellUrls.length);
+        console.log('Filtered cantrips (level 0):', cantripsFound.length, cantripsFound);
+
+        if (cantripsFound.length === 0) {
+            spellsGrid.innerHTML = '<p class="info-message">No se encontraron o cargaron conjuros de nivel 0 (cantrips).</p>';
+            return;
+        }
+
+        renderSpellCards(cantripsFound);
+
+    } catch (error) {
+        console.error("Error fetching cantrips (initial call or unexpected):", error);
+        spellsGrid.innerHTML = '<p class="error-message">Fallo al cargar los conjuros. Por favor, inténtalo de nuevo más tarde.</p>';
+    }
+}
+
+    // Function to Render Spell Cards (Reduced View)
+    function renderSpellCards(spells) {
+        spellsGrid.innerHTML = '';
+        spells.forEach(spell => {
+            const spellCard = document.createElement('div');
+            spellCard.classList.add('spell-card-reduced');
+            spellCard.dataset.spellUrl = spell.url;
+
+            const schoolIcon = getSchoolIcon(spell.school.name);
+
+            spellCard.innerHTML = `
+                <div class="spell-icon-container">
+                    ${schoolIcon}
+                </div>
+                <h3 class="spell-name-reduced">${spell.name}</h3>
+            `;
+            spellsGrid.appendChild(spellCard);
+
+            spellCard.addEventListener('click', () => openSpellModal(spell.url));
+        });
+    }
+
+    // Helper function to get school icon (placeholder)
+    function getSchoolIcon(schoolName) {
+        switch (schoolName.toLowerCase()) {
+            case 'abjuration': return '<img src="../files/icons/abjuration.svg" alt="Abjuration Icon">';
+            case 'conjuration': return '<img src="../files/icons/conjuration.svg" alt="Conjuration Icon">';
+            case 'divination': return '<img src="../files/icons/divination.svg" alt="Divination Icon">';
+            case 'enchantment': return '<img src="../files/icons/enchantment.svg" alt="Enchantment Icon">';
+            case 'evocation': return '<img src="../files/icons/evocation.svg" alt="Evocation Icon">';
+            case 'illusion': return '<img src="../files/icons/illusion.svg" alt="Illusion Icon">';
+            case 'necromancy': return '<img src="../files/icons/necromancy.svg" alt="Necromancy Icon">';
+            case 'transmutation': return '<img src="../files/icons/transmutation.svg" alt="Transmutation Icon">';
+            default: return '<img src="../files/icons/default.svg" alt="Default Spell Icon">'; // Fallback
+        }
+    }
+
+    // Function to Open Modal with Full Spell Details
+    async function openSpellModal(spellUrl) {
+        try {
+            const response = await fetch(`${API_BASE_URL}${spellUrl}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const spell = await response.json();
+
+            modalSpellDetails.innerHTML = `
+                <div class="modal-spell-header">
+                    <div class="modal-spell-icon-container">
+                        ${getSchoolIcon(spell.school.name)}
+                    </div>
+                    <h2>${spell.name}</h2>
+                    <p>${spell.level === 0 ? 'Cantrip' : spell.level + (spell.level === 1 ? 'st' : spell.level === 2 ? 'nd' : spell.level === 3 ? 'rd' : 'th')}-level ${spell.school.name} ${spell.ritual ? '(ritual)' : ''}</p>
+                </div>
+                <div class="modal-spell-stats">
+                    <p><strong>Casting Time:</strong> ${spell.casting_time}</p>
+                    <p><strong>Range:</strong> ${spell.range}</p>
+                    <p><strong>Components:</strong> ${spell.components.join(', ')} ${spell.material ? `(${spell.material})` : ''}</p>
+                    <p><strong>Duration:</strong> ${spell.duration}</p>
+                </div>
+                <div class="modal-spell-description">
+                    ${spell.desc.map(p => `<p>${p}</p>`).join('')}
+                    ${spell.higher_level ? spell.higher_level.map(p => `<p><strong>At Higher Levels:</strong> ${p}</p>`).join('') : ''}
+                </div>
+                <div class="modal-spell-classes">
+                    <p><strong>Classes:</strong> ${spell.classes.map(cls => cls.name).join(', ')}</p>
+                </div>
+            `;
+
+            spellModal.style.display = 'flex';
+        } catch (error) {
+            console.error("Error fetching spell details for modal:", error);
+            modalSpellDetails.innerHTML = '<p class="error-message">Failed to load spell details.</p>';
+            spellModal.style.display = 'flex';
+        }
+    }
+
+    // Function to Close Modal
+    function closeSpellModal() {
+        spellModal.style.display = 'none';
+        modalSpellDetails.innerHTML = '';
+    }
+
+    closeButton.addEventListener('click', closeSpellModal);
+
+    spellModal.addEventListener('click', (event) => {
+        if (event.target === spellModal) {
+            closeSpellModal();
+        }
     });
+
+    fetchCantrips();
+
+    // --- FIN DEL CÓDIGO DE SPELLS PAGE ---
 });
