@@ -24,8 +24,6 @@
 
     <main>
         <section id="spells-section">
-            <h2 class="section-title">Cantrips Catalog</h2>
-
             <div class="controls-container">
                 <input type="text" id="search-bar" placeholder="Search spell by name...">
                 <div class="filters-group">
@@ -36,6 +34,9 @@
                         <option value="">All classes</option>
                     </select>
                 </div>
+            </div>
+            <div id="loading-indicator" class="loading-message">
+                <div class="spinner"></div> <p>Hold your dice! We're retrieving your spells.</p>
             </div>
             <div id="spells-grid"></div>
         </section>

@@ -85,10 +85,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     checkMediaQuery();
-
     tabletAndMobileMediaQuery.addListener(checkMediaQuery);
 
-    // --- FIN DEL CÓDIGO DE LA BARRA DE NAVEGACIÓN ---
+    // --- FIN DEL CÓDIGO DE LA BARRA de NAVEGACIÓN ---
 
 
     // --- INICIO DEL CÓDIGO DE SPELLS PAGE ---
@@ -98,77 +97,76 @@ document.addEventListener('DOMContentLoaded', function() {
     const spellModal = document.getElementById('spell-modal');
     const modalSpellDetails = document.getElementById('modal-spell-details');
     const closeButton = document.querySelector('.close-button');
+    const searchBar = document.getElementById('search-bar');
+    const classFilter = document.getElementById('class-filter');
+    const schoolFilter = document.getElementById('school-filter');
+    const loadingIndicator = document.getElementById('loading-indicator');
+
+    // Variable para almacenar todos los cantrips cargados
+    let allCantrips = [];
 
     // API Endpoint
     const API_BASE_URL = 'https://www.dnd5eapi.co';
 
-    // Function to Fetch Cantrips
-async function fetchCantrips() {
-    console.log('fetchCantrips is running...');
+    // Function to Handle Search
+    function handleSearch() {
+        const searchTerm = searchBar.value.toLowerCase();
+        const selectedClass = classFilter.value;
+        const selectedSchool = schoolFilter.value;
 
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/spells`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log('Initial spell list from API:', data.results.length, data.results);
-
-        const allSpellUrls = data.results;
-        const cantripsFound = [];
-        
-        // --- CONFIGURACIÓN DE CONCURRENCIA ---
-        const CONCURRENT_REQUESTS = 8;
-        const DELAY_BETWEEN_BATCHES = 80;
-
-        console.log(`Starting detailed fetch for spells with ${CONCURRENT_REQUESTS} concurrent requests and ${DELAY_BETWEEN_BATCHES}ms delay between batches...`);
-
-        for (let i = 0; i < allSpellUrls.length; i += CONCURRENT_REQUESTS) {
-            const batch = allSpellUrls.slice(i, i + CONCURRENT_REQUESTS);
+        let filteredResults = allCantrips.filter(spell => {
+            const matchesSearch = spell.name.toLowerCase().includes(searchTerm);
             
-            const batchPromises = batch.map(async (spell) => {
-                try {
-                    const detailResponse = await fetch(`${API_BASE_URL}${spell.url}`);
-                    if (!detailResponse.ok) {
-                        console.warn(`Failed to fetch details for ${spell.name}: status ${detailResponse.status}. Skipping.`);
-                        return null; 
-                    }
-                    const detailedSpell = await detailResponse.json();
-                    return detailedSpell;
-                } catch (detailError) {
-                    console.error(`Error fetching details for ${spell.name}:`, detailError);
-                    return null;
-                }
-            });
+            const matchesClass = selectedClass === "" || spell.classes.some(cls => cls.index === selectedClass);
+            const matchesSchool = selectedSchool === "" || spell.school.index === selectedSchool;
 
-            const results = await Promise.all(batchPromises);
-            
-            results.forEach(detailedSpell => {
-                if (detailedSpell && detailedSpell.level === 0) {
-                    cantripsFound.push(detailedSpell);
-                }
-            });
+            return matchesSearch && matchesClass && matchesSchool;
+        });
 
-            if (i + CONCURRENT_REQUESTS < allSpellUrls.length) {
-                await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
-            }
+        if (filteredResults.length > 0) {
+            renderSpellCards(filteredResults);
+        } else {
+            spellsGrid.innerHTML = '<p class="info-message">No se encontraron conjuros que coincidan con tu búsqueda y filtros.</p>';
         }
-
-        console.log('Total detailed spells processed:', allSpellUrls.length);
-        console.log('Filtered cantrips (level 0):', cantripsFound.length, cantripsFound);
-
-        if (cantripsFound.length === 0) {
-            spellsGrid.innerHTML = '<p class="info-message">No se encontraron o cargaron conjuros de nivel 0 (cantrips).</p>';
-            return;
-        }
-
-        renderSpellCards(cantripsFound);
-
-    } catch (error) {
-        console.error("Error fetching cantrips (initial call or unexpected):", error);
-        spellsGrid.innerHTML = '<p class="error-message">Fallo al cargar los conjuros. Por favor, inténtalo de nuevo más tarde.</p>';
     }
-}
+
+// Function to Populate Filters
+    function populateFilters(cantrips) {
+        const classesSet = new Set(); 
+        const schoolsSet = new Set();
+
+        cantrips.forEach(spell => {
+            // Añadir clases
+            spell.classes.forEach(cls => {
+                classesSet.add(JSON.stringify({ name: cls.name, index: cls.index }));
+            });
+            // Añadir escuelas
+            schoolsSet.add(JSON.stringify({ name: spell.school.name, index: spell.school.index }));
+        });
+
+        const sortedClasses = Array.from(classesSet).map(str => JSON.parse(str)).sort((a, b) => a.name.localeCompare(b.name));
+        const sortedSchools = Array.from(schoolsSet).map(str => JSON.parse(str)).sort((a, b) => a.name.localeCompare(b.name));
+
+        classFilter.innerHTML = '<option value="">All classes</option>';
+        schoolFilter.innerHTML = '<option value="">All schools</option>'; 
+
+
+        // Rellenar el filtro de Clases
+        sortedClasses.forEach(cls => {
+            const option = document.createElement('option');
+            option.value = cls.index;
+            option.textContent = cls.name;
+            classFilter.appendChild(option);
+        });
+
+        // Rellenar el filtro de Escuelas
+        sortedSchools.forEach(school => {
+            const option = document.createElement('option');
+            option.value = school.index;
+            option.textContent = school.name;
+            schoolFilter.appendChild(option);
+        });
+    }
 
     // Function to Render Spell Cards (Reduced View)
     function renderSpellCards(spells) {
@@ -195,15 +193,15 @@ async function fetchCantrips() {
     // Helper function to get school icon (placeholder)
     function getSchoolIcon(schoolName) {
         switch (schoolName.toLowerCase()) {
-            case 'abjuration': return '<img src="../files/icons/abjuration.svg" alt="Abjuration Icon">';
-            case 'conjuration': return '<img src="../files/icons/conjuration.svg" alt="Conjuration Icon">';
-            case 'divination': return '<img src="../files/icons/divination.svg" alt="Divination Icon">';
-            case 'enchantment': return '<img src="../files/icons/enchantment.svg" alt="Enchantment Icon">';
-            case 'evocation': return '<img src="../files/icons/evocation.svg" alt="Evocation Icon">';
-            case 'illusion': return '<img src="../files/icons/illusion.svg" alt="Illusion Icon">';
-            case 'necromancy': return '<img src="../files/icons/necromancy.svg" alt="Necromancy Icon">';
-            case 'transmutation': return '<img src="../files/icons/transmutation.svg" alt="Transmutation Icon">';
-            default: return '<img src="../files/icons/default.svg" alt="Default Spell Icon">'; // Fallback
+            case 'abjuration': return '<img src="../files/icons/abjuration.png" alt="Abjuration Icon">';
+            case 'conjuration': return '<img src="../files/icons/conjuration.png" alt="Conjuration Icon">';
+            case 'divination': return '<img src="../files/icons/divination.png" alt="Divination Icon">';
+            case 'enchantment': return '<img src="../files/icons/enchantment.png" alt="Enchantment Icon">';
+            case 'evocation': return '<img src="../files/icons/evocation.png" alt="Evocation Icon">';
+            case 'illusion': return '<img src="../files/icons/illusion.png" alt="Illusion Icon">';
+            case 'necromancy': return '<img src="../files/icons/necromancy.png" alt="Necromancy Icon">';
+            case 'transmutation': return '<img src="../files/icons/transmutation.png" alt="Transmutation Icon">';
+            default: return '<img src="../files/icons/default.png" alt="Default Spell Icon">'; // Fallback
         }
     }
 
@@ -261,7 +259,96 @@ async function fetchCantrips() {
         }
     });
 
+    // Function to Fetch Cantrips
+async function fetchCantrips() {
+    console.log('fetchCantrips is running...');
+
+    // --- Muestra el indicador al inicio de la carga ---
+    loadingIndicator.classList.remove('hidden');
+    spellsGrid.innerHTML = '';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/spells`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('Initial spell list from API:', data.results.length, data.results);
+
+        const allSpellUrls = data.results;
+        const cantripsFound = [];
+
+        const CONCURRENT_REQUESTS = 8;
+        const DELAY_BETWEEN_BATCHES = 80;
+
+        console.log(`Starting detailed fetch for spells with ${CONCURRENT_REQUESTS} concurrent requests and ${DELAY_BETWEEN_BATCHES}ms delay between batches...`);
+
+        for (let i = 0; i < allSpellUrls.length; i += CONCURRENT_REQUESTS) {
+            const batch = allSpellUrls.slice(i, i + CONCURRENT_REQUESTS);
+
+            const batchPromises = batch.map(async (spell) => {
+                try {
+                    const detailResponse = await fetch(`${API_BASE_URL}${spell.url}`);
+                    if (!detailResponse.ok) {
+                        console.warn(`Failed to fetch details for ${spell.name}: status ${detailResponse.status}. Skipping.`);
+                        return null; 
+                    }
+                    const detailedSpell = await detailResponse.json();
+                    return detailedSpell;
+                } catch (detailError) {
+                    console.error(`Error fetching details for ${spell.name}:`, detailError);
+                    return null;
+                }
+            });
+
+            const results = await Promise.all(batchPromises);
+
+            results.forEach(detailedSpell => {
+                if (detailedSpell && detailedSpell.level === 0) {
+                    cantripsFound.push(detailedSpell);
+                }
+            });
+
+            if (i + CONCURRENT_REQUESTS < allSpellUrls.length) {
+                await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+            }
+        }
+
+        console.log('Total detailed spells processed:', allSpellUrls.length);
+        console.log('Filtered cantrips (level 0):', cantripsFound.length, cantripsFound);
+
+        if (cantripsFound.length === 0) {
+            spellsGrid.innerHTML = '<p class="info-message">No se encontraron o cargaron conjuros de nivel 0 (cantrips).</p>';
+        } else {
+            allCantrips = cantripsFound;
+            renderSpellCards(allCantrips);
+        }
+
+        populateFilters(allCantrips);
+
+
+        if (searchBar) {
+            searchBar.addEventListener('input', handleSearch);
+        } else {
+            console.error("Error: La barra de búsqueda con ID 'search-bar' no fue encontrada en el DOM.");
+        }
+
+        classFilter.addEventListener('change', handleSearch);
+        schoolFilter.addEventListener('change', handleSearch);
+
+        // --- OCULTA el indicador de carga si todo salió bien ---
+        loadingIndicator.classList.add('hidden'); 
+
+
+    } catch (error) {
+        console.error("Error fetching cantrips (initial call or unexpected):", error);
+        spellsGrid.innerHTML = '<p class="error-message">Fallo al cargar los conjuros. Por favor, inténtalo de nuevo más tarde.</p>';
+        // --- OCULTA el indicador de carga si hubo un error ---
+        loadingIndicator.classList.add('hidden'); 
+    }
+}
+
+    // --- Llamada inicial a fetchCantrips (AL FINAL del DOMContentLoaded para spells) ---
     fetchCantrips();
 
-    // --- FIN DEL CÓDIGO DE SPELLS PAGE ---
 });
